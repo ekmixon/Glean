@@ -18,8 +18,8 @@ EXAMPLE_SCHEMA_PATH = find_path_in_fbcode_dir("glean/example/schema")
 EXAMPLE_FACTS_PATH = find_path_in_fbcode_dir("glean/example/facts.glean")
 
 REPO = "dbtest-repo"
-DB = REPO + "/f00baa"
-PROMPT = REPO + ">"
+DB = f"{REPO}/f00baa"
+PROMPT = f"{REPO}>"
 
 
 class GleanShellTest(BaseFacebookTestCase):
@@ -30,35 +30,32 @@ class GleanShellTest(BaseFacebookTestCase):
     def startShell(cls, db, schema=SCHEMA_PATH):
         cls.tmpdir = pexpect.run("mktemp -d", encoding="utf8").strip()
 
-        pexpect.run("mkdir " + cls.tmpdir + "/db")
-        pexpect.run("mkdir " + cls.tmpdir + "/schema")
-        pexpect.run(MKTESTDB_PATH + " " + cls.tmpdir + "/db")
-        pexpect.run("ls " + cls.tmpdir + "/db")
+        pexpect.run(f"mkdir {cls.tmpdir}/db")
+        pexpect.run(f"mkdir {cls.tmpdir}/schema")
+        pexpect.run(f"{MKTESTDB_PATH} {cls.tmpdir}/db")
+        pexpect.run(f"ls {cls.tmpdir}/db")
 
-        if db is None:
-            db_args = []
-        else:
-            db_args = ["--db=" + db if db != "" else ""]
-
+        db_args = [] if db is None else [f"--db={db}" if db != "" else ""]
         if schema is None:
-            schema_args = ["--schema=" + cls.tmpdir + "/schema"]
+            schema_args = [f"--schema={cls.tmpdir}/schema"]
         else:
-            schema_args = ["--schema=" + schema]
+            schema_args = [f"--schema={schema}"]
 
         cls.process = pexpect.spawn(
             GLEAN_PATH,
             logfile=sys.stdout,
             encoding="utf8",
-            args=["--db-root=" + cls.tmpdir + "/db"]
-            + schema_args
-            + ["shell"]
-            + db_args,
+            args=(
+                (([f"--db-root={cls.tmpdir}/db"] + schema_args) + ["shell"])
+                + db_args
+            ),
         )
+
 
         if db is None:
             cls.process.expect(">")
         else:
-            cls.shellCommand(":database " + db)
+            cls.shellCommand(f":database {db}")
             cls.process.expect(PROMPT)
 
     @classmethod
@@ -74,7 +71,7 @@ class GleanShellTest(BaseFacebookTestCase):
     @classmethod
     def __del__(cls):
         if cls.tmpdir:
-            pexpect.run("rm -rf " + cls.tmpdir)
+            pexpect.run(f"rm -rf {cls.tmpdir}")
 
     @classmethod
     def shellCommand(cls, cmd, prompt=PROMPT):
@@ -89,14 +86,12 @@ class GleanShellReload(GleanShellTest):
         cls.startShell(None, None)
 
     def test(self):
-        pexpect.run(
-            "cp " + EXAMPLE_SCHEMA_PATH + "/example.angle " + self.tmpdir + "/schema"
-        )
+        pexpect.run(f"cp {EXAMPLE_SCHEMA_PATH}/example.angle {self.tmpdir}/schema")
         self.shellCommand(":reload", ">")
-        self.shellCommand(":load " + EXAMPLE_FACTS_PATH, "facts>")
+        self.shellCommand(f":load {EXAMPLE_FACTS_PATH}", "facts>")
 
         # add a new derived predicate to the schema
-        with open(self.tmpdir + "/schema/example.angle", "a") as f:
+        with open(f"{self.tmpdir}/schema/example.angle", "a") as f:
             f.write(
                 "schema example.2 : example.1 {"
                 + "  predicate Foo:string S where Class {S,_ }"
@@ -116,7 +111,7 @@ class GleanShellNoDB(GleanShellTest):
         cls.startShell(None)
 
     def test(self):
-        output = self.shellCommand(":database " + DB)
+        output = self.shellCommand(f":database {DB}")
         self.assertIn(DB, output)
 
 
@@ -130,7 +125,7 @@ class GleanShellListDBs(GleanShellTest):
         self.assertIn(DB, output)
 
         # With full DB argument
-        output = self.shellCommand(":list " + DB)
+        output = self.shellCommand(f":list {DB}")
         self.assertIn(DB, output)
 
         # With non-existent repo filter argument
@@ -187,10 +182,11 @@ class GleanShellQuery(GleanShellTest):
 class GleanShellLoad(GleanShellTest):
     def test(self):
         repo = "test"
-        prompt = repo + ">"
+        prompt = f"{repo}>"
         self.shellCommand(
-            ":load " + repo + "/0 glean/shell/tests/expr.glean", prompt=prompt
+            f":load {repo}/0 glean/shell/tests/expr.glean", prompt=prompt
         )
+
         output = self.shellCommand(":db", prompt=prompt)
         self.assertIn("test/0", output)
 
@@ -215,11 +211,11 @@ class GleanShellLoad(GleanShellTest):
 
 class GleanShellDump(GleanShellTest):
     def test(self):
-        dumpfile = self.tmpdir + "/test.glean"
-        self.shellCommand(":dump " + dumpfile)
+        dumpfile = f"{self.tmpdir}/test.glean"
+        self.shellCommand(f":dump {dumpfile}")
         repo = "test"
-        prompt = repo + ">"
-        self.shellCommand(":load " + repo + "/0 " + dumpfile, prompt=prompt)
+        prompt = f"{repo}>"
+        self.shellCommand(f":load {repo}/0 {dumpfile}", prompt=prompt)
         output = self.shellCommand(":stat", prompt=prompt)
         self.assertIsNotNone(re.search("sys.Blob.1\r\n *count: 2", output))
 
